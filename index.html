@@ -1,100 +1,51 @@
 <!DOCTYPE html>
-<html lang="en">
+<html>
 <head>
-  <meta charset="UTF-8">
-  <title>OneX Smart Gold (OSG) – Staking</title>
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-
-  <script src="https://cdn.jsdelivr.net/npm/ethers@5.7.2/dist/ethers.min.js"></script>
+  <meta charset="UTF-8" />
+  <title>OneX Smart Gold – Staking</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <script src="https://cdn.jsdelivr.net/npm/ethers@5.7.2/dist/ethers.umd.min.js"></script>
 
   <style>
-    body {
-      font-family: Arial, sans-serif;
-      background: #0b0b0b;
-      color: #fff;
-      text-align: center;
-      padding: 30px;
-    }
-    .box {
-      max-width: 420px;
-      margin: auto;
-      background: #151515;
-      padding: 25px;
-      border-radius: 14px;
-    }
-    button {
-      padding: 10px 18px;
-      border-radius: 8px;
-      border: none;
-      background: gold;
-      color: black;
-      font-weight: bold;
-      margin-top: 10px;
-      cursor: pointer;
-    }
-    input {
-      width: 100%;
-      padding: 10px;
-      border-radius: 6px;
-      border: none;
-      margin-top: 6px;
-    }
-    .small {
-      font-size: 13px;
-      color: #aaa;
-    }
+    body { background:#0b0f19; color:#fff; font-family:Arial; text-align:center; }
+    .box { background:#131a2a; padding:20px; margin:15px auto; max-width:420px; border-radius:12px; }
+    button { width:100%; padding:12px; margin-top:10px; border:none; border-radius:8px; background:#f5c542; font-size:16px; }
+    input { width:100%; padding:10px; margin-top:10px; border-radius:6px; }
+    .small { font-size:13px; opacity:0.8; }
   </style>
 </head>
 
 <body>
+
+<h2>OneX Smart Gold (OSG)</h2>
+<p class="small">Stake • Earn • Grow</p>
+
 <div class="box">
-  <h2>OneX Smart Gold (OSG)</h2>
-  <p class="small">Official Staking Portal</p>
-
   <button onclick="connectWallet()">🔌 Connect Wallet</button>
-  <p id="walletStatus" class="small"></p>
+  <p id="wallet"></p>
+  <p id="balance"></p>
+</div>
 
-  <hr>
+<div class="box">
+  <h3>📥 Stake OSG</h3>
+  <input id="stakeAmount" placeholder="Enter OSG amount" />
+  <button onclick="approveAndStake()">Approve & Stake</button>
 
-  <p><b>OSG Balance:</b> <span id="tokenBalance">0</span></p>
-  <p><b>Staked:</b> <span id="stakedBalance">0</span></p>
-
-  <input id="stakeAmount" placeholder="Enter OSG amount to stake" />
-  <button onclick="stake()">📥 Stake</button>
-  <button onclick="unstake()">📤 Unstake</button>
-
-  <hr>
-
-  <div id="refBox" style="display:none;">
-    <p><b>Your Referral Link</b></p>
-    <input id="refLink" readonly />
-    <button onclick="copyRef()">📋 Copy</button>
-  </div>
+  <h3 style="margin-top:15px;">📤 Unstake</h3>
+  <button onclick="unstake()">Unstake</button>
 </div>
 
 <script>
-// ===== CONFIG (CHECK CAREFULLY) =====
+/* ================= CONFIG ================= */
+
 const OSG_TOKEN = "0x25c49541763b9Aa482a28E41b5a150CDa2E49a82";
-const STAKING_CONTRACT = "0xa1D71A7459D757e6471ec7573867301A261504A4";
+const STAKING_CONTRACT = "0xa1D71A7459D757e6471ec7573867";
 
-const ERC20_ABI = [
-  "function balanceOf(address) view returns (uint256)",
-  "function approve(address,uint256) returns (bool)",
-  "function decimals() view returns (uint8)"
-];
+/* ================= GLOBAL ================= */
 
-const STAKING_ABI = [
-  "function stake(uint256,address)",
-  "function unstake(uint256)",
-  "function stakedBalance(address) view returns (uint256)"
-];
+let provider, signer, user;
 
-let provider, signer, user, token, staking, decimals = 18;
-let referrer = null;
-
-// read referral
-const params = new URLSearchParams(window.location.search);
-if (params.get("ref")) referrer = params.get("ref");
+/* ================= CONNECT ================= */
 
 async function connectWallet() {
   provider = new ethers.providers.Web3Provider(window.ethereum);
@@ -102,60 +53,72 @@ async function connectWallet() {
   signer = provider.getSigner();
   user = await signer.getAddress();
 
-  const net = await provider.getNetwork();
-  if (net.chainId !== 137) {
-    alert("Switch to Polygon network");
-    return;
-  }
+  document.getElementById("wallet").innerText =
+    "Connected: " + user.slice(0,6) + "..." + user.slice(-4);
 
-  token = new ethers.Contract(OSG_TOKEN, ERC20_ABI, signer);
-  staking = new ethers.Contract(STAKING_CONTRACT, STAKING_ABI, signer);
-  decimals = await token.decimals();
+  getBalance();
+}
 
-  document.getElementById("walletStatus").innerText =
-    "Connected: " + user;
+/* ================= BALANCE ================= */
 
+async function getBalance() {
+  const abi = [
+    "function balanceOf(address) view returns(uint256)",
+    "function decimals() view returns(uint8)"
+  ];
+  const token = new ethers.Contract(OSG_TOKEN, abi, provider);
   const bal = await token.balanceOf(user);
-  document.getElementById("tokenBalance").innerText =
-    ethers.utils.formatUnits(bal, decimals);
-
-  const staked = await staking.stakedBalance(user);
-  document.getElementById("stakedBalance").innerText =
-    ethers.utils.formatUnits(staked, decimals);
-
-  const link =
-    window.location.origin +
-    window.location.pathname +
-    "?ref=" +
-    user;
-
-  document.getElementById("refLink").value = link;
-  document.getElementById("refBox").style.display = "block";
+  const dec = await token.decimals();
+  document.getElementById("balance").innerText =
+    "OSG Balance: " + ethers.utils.formatUnits(bal, dec);
 }
 
-async function stake() {
-  const amt = document.getElementById("stakeAmount").value;
-  const value = ethers.utils.parseUnits(amt, decimals);
+/* ================= APPROVE + STAKE ================= */
 
-  await token.approve(STAKING_CONTRACT, value);
-  await staking.stake(value, referrer ?? ethers.constants.AddressZero);
+async function approveAndStake() {
+  const amount = document.getElementById("stakeAmount").value;
+  if (!amount || amount <= 0) return alert("Enter valid amount");
 
-  alert("Stake submitted");
+  const tokenAbi = [
+    "function approve(address spender, uint256 amount) returns(bool)",
+    "function decimals() view returns(uint8)"
+  ];
+
+  const stakingAbi = [
+    "function stake(uint256 amount)"
+  ];
+
+  const token = new ethers.Contract(OSG_TOKEN, tokenAbi, signer);
+  const staking = new ethers.Contract(STAKING_CONTRACT, stakingAbi, signer);
+
+  const decimals = await token.decimals();
+  const parsed = ethers.utils.parseUnits(amount, decimals);
+
+  /* 1️⃣ Approve */
+  const tx1 = await token.approve(STAKING_CONTRACT, parsed);
+  await tx1.wait();
+
+  /* 2️⃣ Stake */
+  const tx2 = await staking.stake(parsed);
+  await tx2.wait();
+
+  alert("✅ Stake successful");
+  getBalance();
 }
+
+/* ================= UNSTAKE ================= */
 
 async function unstake() {
-  const amt = document.getElementById("stakeAmount").value;
-  const value = ethers.utils.parseUnits(amt, decimals);
+  const abi = ["function unstake()"];
+  const staking = new ethers.Contract(STAKING_CONTRACT, abi, signer);
 
-  await staking.unstake(value);
-  alert("Unstake submitted");
-}
+  const tx = await staking.unstake();
+  await tx.wait();
 
-function copyRef() {
-  document.getElementById("refLink").select();
-  document.execCommand("copy");
-  alert("Referral link copied");
+  alert("✅ Unstake successful");
+  getBalance();
 }
 </script>
+
 </body>
 </html>
